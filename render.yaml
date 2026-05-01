@@ -15,7 +15,7 @@ services:
     runtime: python
     plan: free                 # 무료 티어 (15분 미사용 시 sleep)
     region: singapore          # 한국에서 가까운 리전
-    buildCommand: pip install -r requirements.txt
+    buildCommand: apt-get update && apt-get install -y --no-install-recommends fonts-noto-cjk fonts-nanum && fc-cache -fv && pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:

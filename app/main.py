@@ -67,14 +67,25 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
 # 데이터와 AI 모델은 서버 시작 시 1회 로드 (요청마다 재로딩 X)
-print("[startup] 데이터 로드 중...")
-DF = pd.read_csv(DATA_PATH)
-DF = add_congestion_columns(DF)
-print(f"[startup] 데이터 행 수: {len(DF):,}")
+# startup이 실패해도 서버는 떠야 디버깅 가능 — 예외를 잡아 STARTUP_ERROR 에 저장
+DF = None
+AI_MODEL = None
+STARTUP_ERROR = None
+try:
+    print("[startup] 데이터 로드 중...", flush=True)
+    DF = pd.read_csv(DATA_PATH)
+    DF = add_congestion_columns(DF)
+    print(f"[startup] 데이터 행 수: {len(DF):,}", flush=True)
 
-print("[startup] AI 모델 학습 중...")
-AI_MODEL = CongestionModel(model_type="tree", max_depth=6).fit(DF)
-print(f"[startup] AI 모델 테스트 정확도: {AI_MODEL.test_accuracy:.3f}")
+    print("[startup] AI 모델 학습 중...", flush=True)
+    AI_MODEL = CongestionModel(model_type="tree", max_depth=6).fit(DF)
+    print(f"[startup] AI 모델 테스트 정확도: {AI_MODEL.test_accuracy:.3f}", flush=True)
+    print("[startup] 초기화 완료.", flush=True)
+except Exception as e:
+    import traceback
+    STARTUP_ERROR = f"{type(e).__name__}: {e}\n\n{traceback.format_exc()}"
+    print("[startup] !!! 초기화 실패 !!!", flush=True)
+    print(STARTUP_ERROR, flush=True)
 
 
 # =============================================================================
@@ -83,10 +94,25 @@ print(f"[startup] AI 모델 테스트 정확도: {AI_MODEL.test_accuracy:.3f}")
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     """입력 폼 페이지"""
+    if STARTUP_ERROR is not None:
+        # 부팅 실패 시 에러 페이지 직접 반환 (디버깅 용도)
+        return HTMLResponse(
+            content=(
+                "<html><head><meta charset='utf-8'><title>Startup Error</title>"
+                "<style>body{font-family:system-ui;padding:24px;max-width:900px;margin:auto;}"
+                "pre{background:#fef2f2;border:1px solid #fecaca;padding:16px;border-radius:8px;"
+                "white-space:pre-wrap;word-break:break-word;}h1{color:#b91c1c;}</style></head>"
+                "<body><h1>서버 초기화 실패</h1>"
+                "<p>서버는 떠 있지만 데이터 또는 AI 모델 로드에 실패했습니다. "
+                "Render Logs와 아래 메시지를 확인하세요.</p>"
+                f"<pre>{STARTUP_ERROR}</pre></body></html>"
+            ),
+            status_code=500,
+        )
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "stations": get_all_stations(),
             "hours": list(range(24)),
         },
@@ -101,10 +127,16 @@ def api_stations():
 
 @app.get("/health")
 def health_check():
-    """Render 헬스체크용. 서버가 떠있고 모델이 학습돼 있으면 200 반환."""
+    """Render 헬스체크용. startup 성공 여부 + 모델 준비 여부 반환."""
+    if STARTUP_ERROR is not None:
+        return JSONResponse(
+            {"status": "startup_failed", "error": STARTUP_ERROR[:500]},
+            status_code=500,
+        )
     ready = AI_MODEL is not None and AI_MODEL.feature_columns is not None
     return JSONResponse(
-        {"status": "ok" if ready else "loading", "rows": int(len(DF))},
+        {"status": "ok" if ready else "loading",
+         "rows": int(len(DF)) if DF is not None else 0},
         status_code=200 if ready else 503,
     )
 
@@ -119,6 +151,11 @@ def analyze(
     """
     분석 실행 후 결과 페이지 렌더링.
     """
+    if STARTUP_ERROR is not None or DF is None or AI_MODEL is None:
+        return HTMLResponse(
+            content=f"<h1>서버 초기화 실패</h1><pre>{STARTUP_ERROR or 'Unknown'}</pre>",
+            status_code=500,
+        )
     is_weekend = (weekday_type == "weekend")
     weekday_label = "주말" if is_weekend else "평일"
 
@@ -130,8 +167,7 @@ def analyze(
 
     # 데이터 부족 처리
     if stats_res["n"] == 0:
-        return templates.TemplateResponse("result.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "result.html", {
             "error": f"{station}역 {weekday_label} {hour}시 조건에 해당하는 데이터가 없습니다.",
             "station": station, "weekday_label": weekday_label, "hour": hour,
         })
@@ -198,8 +234,7 @@ def analyze(
     # 표본 부족 경고
     low_sample_warning = stats_res["n"] < 10
 
-    return templates.TemplateResponse("result.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "result.html", {
         "error": None,
         # 입력값
         "station": station,
