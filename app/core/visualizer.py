@@ -39,13 +39,23 @@ from app.core.adjacency import get_neighbors, get_all_stations
 def _setup_korean_font():
     """
     한글이 가능한 폰트를 찾아 설정한다.
-    Windows: Malgun Gothic
-    macOS:   AppleGothic
-    Linux:   NanumGothic / Noto Sans CJK KR
 
-    이름으로 못 찾으면, 시스템에 설치된 한글 폰트 파일을 직접 등록한다.
+    우선순위:
+      1) koreanize_matplotlib 패키지가 설치되어 있으면 그것을 사용
+         (NanumGothic 내장, Render 등 시스템 폰트 설치 권한 없는 환경에서 유용)
+      2) OS의 한글 폰트 이름 매칭 (Malgun Gothic, AppleGothic 등)
+      3) 시스템에 있는 한글 폰트 파일 직접 등록
+      4) 못 찾으면 기본값 (한글 깨질 수 있음)
     """
-    # 1차: 폰트 이름으로 매칭
+    # 1차: koreanize_matplotlib (pip로 설치된 경우)
+    try:
+        import koreanize_matplotlib  # noqa: F401  (import만으로 자동 설정됨)
+        plt.rcParams["axes.unicode_minus"] = False
+        return "koreanize_matplotlib (NanumGothic)"
+    except ImportError:
+        pass
+
+    # 2차: 폰트 이름으로 매칭
     name_candidates = [
         "Malgun Gothic", "AppleGothic", "NanumGothic",
         "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo",
@@ -58,7 +68,7 @@ def _setup_korean_font():
             plt.rcParams["axes.unicode_minus"] = False
             return c
 
-    # 2차: 파일 경로로 직접 등록 시도 (Linux 환경 대응)
+    # 3차: 파일 경로로 직접 등록 시도 (Linux 환경 대응)
     file_candidates = [
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
@@ -70,7 +80,6 @@ def _setup_korean_font():
         if os.path.exists(path):
             try:
                 fm.fontManager.addfont(path)
-                # 등록 후 이름 추출
                 prop = fm.FontProperties(fname=path)
                 name = prop.get_name()
                 plt.rcParams["font.family"] = name
@@ -79,7 +88,7 @@ def _setup_korean_font():
             except Exception:
                 continue
 
-    # 3차: 못 찾음 (한글이 깨질 수 있음)
+    # 4차: 못 찾음
     plt.rcParams["axes.unicode_minus"] = False
     return None
 
