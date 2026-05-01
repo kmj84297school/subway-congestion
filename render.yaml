@@ -1,0 +1,26 @@
+# Render.com 배포 설정 (Blueprint)
+# ====================================
+# 이 파일이 있으면 Render에서 "New → Blueprint"로 GitHub 저장소를 연결할 때
+# 자동으로 서비스가 만들어진다.
+#
+# 수동으로 설정하고 싶다면 이 파일 없이도 가능하며, Render 대시보드에서
+# 다음 값들을 직접 입력하면 된다:
+#   - Build Command: pip install -r requirements.txt
+#   - Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+#   - Health Check Path: /health
+
+services:
+  - type: web
+    name: subway-congestion
+    runtime: python
+    plan: free                 # 무료 티어 (15분 미사용 시 sleep)
+    region: singapore          # 한국에서 가까운 리전
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # matplotlib 캐시 경로 (Render 일부 환경에서 필요)
+      - key: MPLCONFIGDIR
+        value: /tmp/mplconfig

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>지하철 혼잡 예측 모델</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="hero">
+      <h1>지하철 혼잡은 전염되는가?</h1>
+      <p class="subtitle">서울 지하철 승하차 데이터를 활용한 혼잡 확률 예측 웹 모델</p>
+      <p class="tagline">
+        평균 · 표준편차 · 상대도수 · <strong>조건부확률</strong> · 독립성 판단
+      </p>
+    </header>
+
+    <section class="card">
+      <h2>분석 조건 선택</h2>
+      <form method="post" action="/analyze" class="form">
+        <div class="field">
+          <label for="station">역 선택</label>
+          <select id="station" name="station" required>
+            {% for s in stations %}
+              <option value="{{ s }}" {% if s == "강남" %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>요일 구분</label>
+          <div class="radio-group">
+            <label class="radio">
+              <input type="radio" name="weekday_type" value="weekday" checked />
+              <span>평일</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="weekday_type" value="weekend" />
+              <span>주말</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="hour">시간대 (0~23시)</label>
+          <select id="hour" name="hour" required>
+            {% for h in hours %}
+              <option value="{{ h }}" {% if h == 18 %}selected{% endif %}>{{ h }}시</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <button type="submit" class="primary-btn">분석 실행</button>
+      </form>
+    </section>
+
+    <section class="card concept">
+      <h2>이 모델이 사용하는 확률 · 통계 개념</h2>
+      <ol>
+        <li><strong>평균과 표준편차</strong>: 특정 조건의 평균 이용량과 그 변동성</li>
+        <li><strong>상대도수 기반 혼잡 확률</strong>: 관측 일수 중 혼잡이 발생한 비율</li>
+        <li><strong>조건부확률 P(B|A)</strong>: 한 역이 혼잡할 때 다른 역도 혼잡할 확률</li>
+        <li><strong>독립성 판단</strong>: P(B|A) 와 P(B)의 차이로 두 사건의 연관성 평가</li>
+      </ol>
+    </section>
+
+    <footer>
+      <p>고등학교 확률과 통계 수행평가용 / 데이터: 가상 샘플 (실제 서울시 열린데이터광장 데이터로 대체 가능)</p>
+    </footer>
+  </div>
+</body>
+</html>

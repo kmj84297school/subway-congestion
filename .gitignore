@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 가상환경
+venv/
+.venv/
+env/
+ENV/
+
+# 패키지 빌드
+build/
+dist/
+*.egg-info/
+*.egg
+
+# 테스트 / 캐시
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+
+# IDE / 에디터
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# OS
+Thumbs.db
+
+# 로그
+*.log
+
+# matplotlib 캐시
+.matplotlib/
+
+# 임시 파일
+/tmp/
+*.tmp
+
+# Jupyter
+.ipynb_checkpoints
+
+# 환경변수 (혹시 .env 만들 경우)
+.env
+.env.local

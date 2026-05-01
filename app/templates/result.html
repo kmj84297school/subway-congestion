@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>분석 결과 - {{ station }}역</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="hero">
+      <h1>분석 결과</h1>
+      <p class="subtitle">{{ station }}역 · {{ weekday_label }} · {{ hour }}시</p>
+      <p><a href="/" class="back-link">← 다른 조건으로 분석</a></p>
+    </header>
+
+    {% if error %}
+      <section class="card error">
+        <h2>데이터 부족</h2>
+        <p>{{ error }}</p>
+      </section>
+    {% else %}
+
+    {% if low_sample_warning %}
+    <section class="card warning">
+      <strong>표본 부족 경고:</strong>
+      이 조건의 관측 일수가 {{ stats.n }}일에 불과합니다. 표본이 적을수록 추정 확률의 변동성이 커지므로 결과 해석에 주의가 필요합니다.
+    </section>
+    {% endif %}
+
+    <!-- 핵심 요약 -->
+    <section class="card">
+      <h2>요약</h2>
+      <div class="summary-grid">
+        <div class="metric">
+          <div class="metric-label">예상 결과 (AI)</div>
+          <div class="metric-value">{{ expected_grade }}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">평균 이용량</div>
+          <div class="metric-value">{{ "{:,.0f}".format(stats.mean) }}명</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">표준편차</div>
+          <div class="metric-value">±{{ "{:,.0f}".format(stats.std) }}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">혼잡 확률 P(혼잡)</div>
+          <div class="metric-value">{{ "%.1f"|format(prob.prob * 100) }}%</div>
+          <div class="metric-sub">{{ prob.n_cong }}/{{ prob.n }}일</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">AI 보조 예측</div>
+          <div class="metric-value">{{ "%.1f"|format(ai.congested_prob * 100) }}%</div>
+          <div class="metric-sub">{% if ai.congested_pred == 1 %}혼잡{% else %}비혼잡{% endif %}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">관측 일수</div>
+          <div class="metric-value">{{ stats.n }}일</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 자동 해석 -->
+    <section class="card highlight">
+      <h2>해석</h2>
+      <p class="interpretation">{{ summary }}</p>
+    </section>
+
+    <!-- 조건부확률 (인접 역) -->
+    {% if conditional_blocks %}
+    <section class="card">
+      <h2>조건부확률 — {{ station }}역과 인접 역의 혼잡 연관성</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>인접 역</th>
+            <th>P(B 혼잡) — 평소</th>
+            <th>P(B 혼잡 | {{ station }} 혼잡)</th>
+            <th>차이 (diff)</th>
+            <th>판정</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for blk in conditional_blocks %}
+          <tr>
+            <td>{{ blk.neighbor }}</td>
+            <td>{% if blk.p_b is not none %}{{ "%.3f"|format(blk.p_b) }}{% else %}-{% endif %}</td>
+            <td>{% if blk.p_b_given_a is not none %}{{ "%.3f"|format(blk.p_b_given_a) }}{% else %}-{% endif %}</td>
+            <td class="{% if blk.diff is not none and blk.diff > 0 %}pos{% elif blk.diff is not none and blk.diff < 0 %}neg{% endif %}">
+              {% if blk.diff is not none %}{{ "%+.3f"|format(blk.diff) }}{% else %}-{% endif %}
+            </td>
+            <td><span class="badge badge-{{ blk.verdict|replace(' ', '-') }}">{{ blk.verdict }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <p class="hint">
+        diff = P(B|A) − P(B) 이며, 절댓값이 클수록 두 사건의 연관성이 강하다.
+        독립이라면 P(B|A) = P(B) 이므로 diff ≈ 0 이어야 한다.
+      </p>
+    </section>
+    {% endif %}
+
+    <!-- 시각화 -->
+    <section class="card">
+      <h2>시각화</h2>
+
+      <h3>1. {{ station }}역 시간대별 평균 이용량</h3>
+      <img src="data:image/png;base64,{{ chart_hourly }}" alt="시간대별 평균" />
+
+      <h3>2. 시간대별 혼잡 확률 (선택 시간대 강조)</h3>
+      <img src="data:image/png;base64,{{ chart_prob }}" alt="시간대별 혼잡 확률" />
+
+      <h3>3. 인접 역 P(B) vs P(B|A) 비교 ★</h3>
+      <p class="hint">
+        이 그래프가 본 분석의 핵심이다. 두 사건이 독립이라면 두 막대(P(B), P(B|A))가
+        같은 높이여야 한다. 빨간 막대(조건부)가 회색 막대(평소)보다 높을수록
+        {{ station }}역과 인접 역의 혼잡이 함께 나타나는 경향이 강하다.
+      </p>
+      <img src="data:image/png;base64,{{ chart_neighbor }}" alt="인접 역 비교" />
+
+      <h3>4. 인접 역 vs 비인접 역의 diff 비교</h3>
+      <p class="hint">
+        같은 그림 안에서 인접 역(빨강)과 비인접 역(회색)의 diff 를 비교한다.
+        대체로 인접 역의 diff 가 양의 방향으로 더 크게 나타나면, 인접한 역끼리
+        혼잡이 함께 발생할 가능성이 통계적으로 더 높음을 시사한다.
+      </p>
+      <img src="data:image/png;base64,{{ chart_diff }}" alt="인접/비인접 diff 비교" />
+    </section>
+
+    {% endif %}
+
+    <footer>
+      <p><a href="/" class="back-link">← 다른 조건으로 분석</a></p>
+    </footer>
+  </div>
+</body>
+</html>
